@@ -1,0 +1,49 @@
+templates:
+  - name: ca-key
+    type: PrivateKey
+    key_size: 2048
+    public_exponent: 65537
+  - name: ca-cert
+    type: Certificate
+    ca: true
+    hostnames:
+      - "*.certs.vn"
+    ip_addr:
+      - 192.168.1.5
+
+    subject:
+      common_name: Authority
+      country: VN
+      organization: Organization
+      org_unit: Unit
+      state: Hanoi
+      locality: Dong Da
+      street: 1 Lang Ha
+    issuer:
+      common_name: Cloud Platform
+      country: VN
+      organization: Organization
+      org_unit: Unit
+      state: Ho Chi Minh City
+      locality: District 3
+      street: 1 Nguyen Thi Minh Khai
+    duration: 1y
+    private_key:
+      # or path: ./ca-key.pem
+      reference: ca-key
+  - name: server-key
+    type: PrivateKey
+    key_size: 2048
+    public_exponent: 65537
+  - name: server-csr
+    type: CertificateSigningRequest
+    subject:
+      common_name: Consul
+      country: VN
+      organization: Organization
+      org_unit: Unit
+      state: Ho Chi Minh City
+      locality: District 3
+      street: 1 Nguyen Thi Minh Khai
+    private_key:
+      reference: server-key
