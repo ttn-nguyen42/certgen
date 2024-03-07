@@ -201,8 +201,8 @@ class X509CertificateBuilder(Byteserializable):
     def is_ca(self) -> Self:
         self._builder = self._builder.add_extension(
             # this cert can only sign itself not others
-            extension=x509.BasicConstraints(ca=True, path_length=0),
-            critical=True
+            x509.BasicConstraints(ca=True, path_length=0),
+            True
         )
         return self
 
