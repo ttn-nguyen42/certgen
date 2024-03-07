@@ -1,5 +1,6 @@
 import datetime
 import enum
+import ipaddress
 import os
 from typing import List
 from typing_extensions import Self
@@ -157,6 +158,8 @@ class X509CertificateBuilder(Byteserializable):
         self._builder = x509.CertificateBuilder()
         self._not_before = None
         self._not_after = None
+        self._alt_names = []
+        self._alt_ips = []
         return self
 
     def private_key(self, private_key: rsa.RSAPrivateKey) -> Self:
@@ -195,6 +198,23 @@ class X509CertificateBuilder(Byteserializable):
         self._builder = self._builder.not_valid_after(date)
         return self
 
+    def is_ca(self) -> Self:
+        self._builder = self._builder.add_extension(
+            # this cert can only sign itself not others
+            extension=x509.BasicConstraints(ca=True, path_length=0),
+            critical=True
+        )
+        return self
+
+    def hostname(self, h: str) -> Self:
+        self._alt_names.append(x509.DNSName(h))
+        return self
+
+    def ip_address(self, ip: str) -> Self:
+        self._alt_names.append(x509.DNSName(ip))
+        self._alt_ips.append(x509.IPAddress(ipaddress.ip_address(ip)))
+        return self
+
     @property
     def certificate(self) -> x509.Certificate:
         n = int.from_bytes(
@@ -202,6 +222,9 @@ class X509CertificateBuilder(Byteserializable):
         self._builder = self._builder.serial_number(number=n)
         public_key = self._private_key.public_key()
         self._builder = self._builder.public_key(key=public_key)
+        if len(self._alt_names) > 0 or len(self._alt_ips) > 0:
+            self._builder = self._builder.add_extension(x509.SubjectAlternativeName(
+                self._alt_names + self._alt_ips), False)
         res = self._builder.sign(
             private_key=self._private_key,
             algorithm=hashes.SHA256(),
@@ -227,6 +250,8 @@ class CertificateSigningRequestBuilder(Byteserializable):
 
     def reset(self) -> Self:
         self._req = x509.CertificateSigningRequestBuilder()
+        self._alt_names = []
+        self._alt_ips = []
         return self
 
     def private_key(self, private_key: rsa.RSAPrivateKey) -> Self:
@@ -242,8 +267,20 @@ class CertificateSigningRequestBuilder(Byteserializable):
         self._req = self._req.subject_name(self._subject)
         return self
 
+    def hostname(self, h: str) -> Self:
+        self._alt_names.append(x509.DNSName(h))
+        return self
+
+    def ip_address(self, ip: str) -> Self:
+        self._alt_names.append(x509.DNSName(ip))
+        self._alt_ips.append(x509.IPAddress(ipaddress.ip_address(ip)))
+        return self
+
     @property
     def request(self) -> x509.CertificateSigningRequest:
+        if len(self._alt_names) > 0 or len(self._alt_ips) > 0:
+            self._req = self._req.add_extension(x509.SubjectAlternativeName(
+                self._alt_names + self._alt_ips), False)
         req = self._req.sign(
             private_key=self._private_key,
             algorithm=hashes.SHA256(),

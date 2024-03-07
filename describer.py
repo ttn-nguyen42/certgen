@@ -9,7 +9,23 @@ from collections import defaultdict
 def read(data: bytes):
     if data is None:
         raise Exception("certificate data is null")
-    CSRDisplay().render(data=data)
+    is_cert: bool = True
+    try:
+        CertificateDisplay().render(data)
+    except Exception as e:
+        is_cert = False
+    if is_cert is True:
+        return
+
+    is_csr: bool = True
+    try:
+        CSRDisplay().render(data)
+    except Exception:
+        is_csr = False
+    if is_csr is True:
+        return
+
+    raise Exception("data is not a certificate or csr")
 
 
 class Displayer():
@@ -32,6 +48,7 @@ class CertificateDisplay(Displayer):
 
         pk = cert.public_key().public_bytes(encoding=Encoding.PEM,
                                             format=PublicFormat.SubjectPublicKeyInfo)
+
         print(t)
         print(pk.decode())
 
@@ -68,15 +85,60 @@ def _cert_table(c: x509.Certificate) -> str:
     table.add_row(["Not Before", c.not_valid_before_utc.isoformat()])
     table.add_row(["Not After", c.not_valid_after_utc.isoformat()])
     table.add_row(["Expiration", format_timedelta(
-        c.not_valid_after_utc - c.not_valid_before_utc)])
+        c.not_valid_after_utc - c.not_valid_before_utc)], divider=True)
+    try:
+        san = c.extensions.get_extension_for_class(
+            x509.SubjectAlternativeName).value
+
+        dns_str = ""
+        for i in san.get_values_for_type(type=x509.DNSName):
+            dns_str += str(i) + "\n"
+        dns_str = dns_str.strip()
+
+        ip_str = ""
+        for i in san.get_values_for_type(type=x509.IPAddress):
+            ip_str += str(i) + "\n"
+        ip_str = ip_str.strip()
+
+    except x509.ExtensionNotFound:
+        dns_str = "N/A"
+        ip_str = "N/A"
+
+    table.add_row(["DNS", dns_str], divider=True)
+    table.add_row(["IP", ip_str], divider=True)
+    try:
+        table.add_row(["Is CA", c.extensions.get_extension_for_class(
+            x509.BasicConstraints).value.ca])
+    except Exception as e:
+        table.add_row(["Is CA", False])
     return table.get_string(header=False)
 
 
 def _csr_table(c: x509.CertificateSigningRequest) -> str:
     table = PrettyTable()
 
-    table.add_row(["Algorithm", c.signature_hash_algorithm.name])
-    table.add_row(["Signature Valid", c.is_signature_valid])
+    try:
+        san = c.extensions.get_extension_for_class(
+            x509.SubjectAlternativeName).value
+
+        dns_str = ""
+        for i in san.get_values_for_type(type=x509.DNSName):
+            dns_str += str(i) + "\n"
+        dns_str = dns_str.strip()
+
+        ip_str = ""
+        for i in san.get_values_for_type(type=x509.IPAddress):
+            ip_str += str(i) + "\n"
+        ip_str = ip_str.strip()
+
+    except x509.ExtensionNotFound:
+        dns_str = "N/A"
+        ip_str = "N/A"
+
+    table.add_row(["Algorithm", c.signature_hash_algorithm.name], divider=True)
+    table.add_row(["Signature Valid", c.is_signature_valid], divider=True)
+    table.add_row(["DNS", dns_str], divider=True)
+    table.add_row(["IP", ip_str], divider=True)
 
     return table.get_string(header=False)
 

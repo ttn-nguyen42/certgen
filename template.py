@@ -50,6 +50,8 @@ cert_schema = Schema({
             "street": Optional(str),
         }
     ),
+    "hostnames": Optional(Use(list, lambda h: And(str, h))),
+    "ip_addr": Optional(Use(list, lambda h: And(str, h))),
     "duration": Use(validate_duration),
     "private_key": Or(
         {"path": str},
@@ -69,6 +71,8 @@ csr_schema = Schema({
         "locality": Optional(str),
         "street": Optional(str),
     },
+    "hostnames": Optional(Use(list, lambda h: And(str, h))),
+    "ip_addr": Optional(Use(list, lambda h: And(str, h))),
     "duration": Use(validate_duration),
     "private_key": Or(
         {"path": str},
@@ -183,6 +187,12 @@ def process_template(tf: dict):
                     raise Exception(
                         f"Private key reference {ref} not found in the template")
                 c_builder.private_key(private_keys_map[ref].private_key)
+        if c["hostnames"] is not None:
+            for h in c["hostnames"]:
+                c_builder.hostname(h=h)
+        if c["ip_addr"] is not None:
+            for i in c["ip_addr"]:
+                c_builder.ip_address(ip=i)
         name = c["name"]
         certificates_map[name] = c_builder
 
@@ -209,6 +219,7 @@ def process_template(tf: dict):
             if subject["street"] is not None:
                 subject_builder.street(subject["street"])
             csr_builder.subject(subject_builder.to_x509_name())
+
         if csr["private_key"] is not None:
             if "path" in csr["private_key"]:
                 raise NotImplemented("File based private key not supported")
@@ -218,6 +229,12 @@ def process_template(tf: dict):
                     raise Exception(
                         f"Private key reference {ref} not found in the template")
                 csr_builder.private_key(private_keys_map[ref].private_key)
+        if c["hostnames"] is not None:
+            for h in c["hostnames"]:
+                c_builder.hostname(h=h)
+        if c["ip_addr"] is not None:
+            for i in c["ip_addr"]:
+                c_builder.ip_address(ip=i)
         name = csr["name"]
         csr_map[name] = csr_builder
 

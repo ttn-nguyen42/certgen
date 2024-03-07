@@ -38,5 +38,13 @@ def generate(path: str):
     template.read_template_file(path=path)
 
 
+@app.command()
+def sign(csr: str, ca: str):
+    """
+    Signs a certificate
+    """
+    pass
+
+
 if __name__ == "__main__":
     app()
