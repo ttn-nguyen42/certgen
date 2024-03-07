@@ -50,6 +50,7 @@ cert_schema = Schema({
             "street": Optional(str),
         }
     ),
+    "ca": Optional(bool),
     "hostnames": Optional(Use(list, lambda h: And(str, h))),
     "ip_addr": Optional(Use(list, lambda h: And(str, h))),
     "duration": Use(validate_duration),
@@ -193,6 +194,8 @@ def process_template(tf: dict):
         if c["ip_addr"] is not None:
             for i in c["ip_addr"]:
                 c_builder.ip_address(ip=i)
+        if c["ca"] is not None:
+            c_builder.is_ca()
         name = c["name"]
         certificates_map[name] = c_builder
 
