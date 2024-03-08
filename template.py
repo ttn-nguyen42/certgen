@@ -5,6 +5,7 @@ from schema import Schema, And, Use, Optional, Or, SchemaError
 import time
 import builders
 from datetime import datetime, timedelta
+import pytz
 
 
 def validate_duration(value: str):
@@ -137,47 +138,13 @@ def process_template(tf: dict):
     for c in certificates:
         c_builder = builders.X509CertificateBuilder()
         if c["duration"] is not None:
-            c_builder.not_valid_before(datetime.now()).not_valid_after(
-                datetime.now() + parse_duration(c["duration"]))
+            c_builder.not_valid_before(datetime.now(tz=pytz.timezone(zone="Asia/Saigon"))).not_valid_after(
+                datetime.now(tz=pytz.timezone(zone="Asia/Saigon")) + parse_duration(c["duration"]))
         if c["subject"] is not None:
-            subject_builder = builders.X509SubjectBuilder()
-            subject = c["subject"]
-            if subject["common_name"] is not None:
-                subject_builder.common_name(
-                    subject["common_name"])
-            if subject["country"] is not None:
-                subject_builder.country(subject["country"])
-            if subject["organization"] is not None:
-                subject_builder.organization(
-                    subject["organization"])
-            if subject["org_unit"] is not None:
-                subject_builder.org_unit(subject["org_unit"])
-            if subject["state"] is not None:
-                subject_builder.state(subject["state"])
-            if subject["locality"] is not None:
-                subject_builder.locality(subject["locality"])
-            if subject["street"] is not None:
-                subject_builder.street(subject["street"])
+            subject_builder = parse_subject(c["subject"])
             c_builder.subject(subject_builder.to_x509_name())
         if c["issuer"] is not None:
-            issuer = c["issuer"]
-            issuer_builder = builders.X509SubjectBuilder()
-            if issuer["common_name"] is not None:
-                issuer_builder.common_name(
-                    issuer["common_name"])
-            if issuer["country"] is not None:
-                issuer_builder.country(issuer["country"])
-            if issuer["organization"] is not None:
-                issuer_builder.organization(
-                    issuer["organization"])
-            if issuer["org_unit"] is not None:
-                issuer_builder.org_unit(issuer["org_unit"])
-            if issuer["state"] is not None:
-                issuer_builder.state(issuer["state"])
-            if issuer["locality"] is not None:
-                issuer_builder.locality(issuer["locality"])
-            if issuer["street"] is not None:
-                issuer_builder.street(issuer["street"])
+            issuer_builder = parse_subject(c["issuer"])
             c_builder.issuer(issuer_builder.to_x509_name())
         if c["private_key"] is not None:
             if "path" in c["private_key"]:
@@ -203,24 +170,7 @@ def process_template(tf: dict):
     for csr in signing_requests:
         csr_builder = builders.CertificateSigningRequestBuilder()
         if csr["subject"] is not None:
-            subject_builder = builders.X509SubjectBuilder()
-            subject = csr["subject"]
-            if subject["common_name"] is not None:
-                subject_builder.common_name(
-                    subject["common_name"])
-            if subject["country"] is not None:
-                subject_builder.country(subject["country"])
-            if subject["organization"] is not None:
-                subject_builder.organization(
-                    subject["organization"])
-            if subject["org_unit"] is not None:
-                subject_builder.org_unit(subject["org_unit"])
-            if subject["state"] is not None:
-                subject_builder.state(subject["state"])
-            if subject["locality"] is not None:
-                subject_builder.locality(subject["locality"])
-            if subject["street"] is not None:
-                subject_builder.street(subject["street"])
+            subject_builder = parse_subject(csr["subject"])
             csr_builder.subject(subject_builder.to_x509_name())
 
         if csr["private_key"] is not None:
@@ -232,12 +182,12 @@ def process_template(tf: dict):
                     raise Exception(
                         f"Private key reference {ref} not found in the template")
                 csr_builder.private_key(private_keys_map[ref].private_key)
-        if c["hostnames"] is not None:
-            for h in c["hostnames"]:
-                c_builder.hostname(h=h)
-        if c["ip_addr"] is not None:
-            for i in c["ip_addr"]:
-                c_builder.ip_address(ip=i)
+        if csr["hostnames"] is not None:
+            for h in csr["hostnames"]:
+                csr_builder.hostname(h=h)
+        if csr["ip_addr"] is not None:
+            for i in csr["ip_addr"]:
+                csr_builder.ip_address(ip=i)
         name = csr["name"]
         csr_map[name] = csr_builder
 
@@ -256,3 +206,22 @@ def to_file(s: Dict[str, builders.Byteserializable]):
         with open(f"./outputs/{k}.pem", "wb", opener=opener) as f:
             f.write(v.bytes())
         print("File written: ", f"{k}.pem")
+
+
+def parse_subject(s: Dict[str, str]) -> builders.X509SubjectBuilder:
+    subject_builder = builders.X509SubjectBuilder()
+    if s["common_name"] is not None:
+        subject_builder.common_name(s["common_name"])
+    if s["country"] is not None:
+        subject_builder.country(s["country"])
+    if s["organization"] is not None:
+        subject_builder.organization(s["organization"])
+    if s["org_unit"] is not None:
+        subject_builder.org_unit(s["org_unit"])
+    if s["state"] is not None:
+        subject_builder.state(s["state"])
+    if s["locality"] is not None:
+        subject_builder.locality(s["locality"])
+    if s["street"] is not None:
+        subject_builder.street(s["street"])
+    return subject_builder

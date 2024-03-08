@@ -108,23 +108,22 @@ class RSAPrivateKeyBuilder(Byteserializable):
     """
 
     def __init__(self) -> None:
-        self.reset()
-
-    def reset(self):
         self._key_size = 2048
         self._public_exponent = 65537
         self._backend = default_backend
         self._product = None
+        return
 
     @property
     def private_key(self) -> rsa.RSAPrivateKey:
-        product = rsa.generate_private_key(
+        if self._product is not None:
+            return self._product
+        self._product = rsa.generate_private_key(
             public_exponent=self._public_exponent,
             key_size=self._key_size,
             backend=self._backend()
         )
-        self.reset()
-        return product
+        return self._product
 
     def bytes(self) -> bytes:
         pk = self.private_key
@@ -200,8 +199,7 @@ class X509CertificateBuilder(Byteserializable):
 
     def is_ca(self) -> Self:
         self._builder = self._builder.add_extension(
-            # this cert can only sign itself not others
-            x509.BasicConstraints(ca=True, path_length=0),
+            x509.BasicConstraints(ca=True, path_length=None),
             True
         )
         return self
@@ -291,5 +289,82 @@ class CertificateSigningRequestBuilder(Byteserializable):
 
     def bytes(self) -> bytes:
         return self.request.public_bytes(
+            encoding=serialization.Encoding.PEM
+        )
+
+
+class SignedCertificateBuilder(Byteserializable):
+    """
+    Signs a certificate
+    """
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self) -> Self:
+        self._builder = x509.CertificateBuilder()
+        self._ca_cert = None
+        self._ca_key = None
+        self._csr = None
+        self._not_before = None
+        self._not_after = None
+        return self
+
+    def certificate_signing_request(self, csr: x509.CertificateSigningRequest) -> Self:
+        if csr is None:
+            raise Exception("csr must not be empty")
+        self._csr = csr
+        return self
+
+    def ca_cert(self, ca_cert: x509.Certificate) -> Self:
+        if ca_cert is None:
+            raise Exception("ca certificate must not be empty")
+        self._ca_cert = ca_cert
+        return self
+
+    def ca_key(self, ca_key: rsa.RSAPrivateKey) -> Self:
+        if ca_key is None:
+            raise Exception("ca private key must not be empty")
+        self._ca_key = ca_key
+        return self
+
+    def not_valid_before(self, date: datetime) -> Self:
+        if date is None:
+            raise Exception("start date must not be empty")
+        if self._not_after is not None and date > self._not_after:
+            raise Exception(
+                "start date must be before expiration date")
+        self._not_before = date
+        return self
+
+    def not_valid_after(self, date: datetime) -> Self:
+        if date is None:
+            raise Exception("expiration date must not be empty")
+        if self._not_before is not None and date < self._not_before:
+            raise Exception(
+                "expiration date must be after start date")
+        self._not_after = date
+        return self
+
+    @property
+    def certificate(self) -> x509.Certificate:
+        c = self._builder.subject_name(name=self._csr.subject)
+        c = c.issuer_name(name=self._ca_cert.issuer)
+        c = c.public_key(key=self._csr.public_key())
+        c = c.serial_number(number=x509.random_serial_number())
+        try:
+            c = c.add_extension(self._csr.extensions.get_extension_for_class(
+                x509.SubjectAlternativeName).value, False)
+            c = c.add_extension(self._csr.extensions.get_extension_for_class(
+                x509.BasicConstraints).value, False)
+        except x509.ExtensionNotFound:
+            pass
+        c = c.not_valid_before(self._not_before)
+        c = c.not_valid_after(self._not_after)
+        return c.sign(private_key=self._ca_key, algorithm=hashes.SHA256(),
+                      backend=default_backend())
+
+    def bytes(self) -> bytes:
+        return self.certificate.public_bytes(
             encoding=serialization.Encoding.PEM
         )
